@@ -1,0 +1,111 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+//////////////////////
+// TENANCY
+//////////////////////
+
+// An organisation using the service (e.g. "leddar"). Every other row is
+// scoped to a tenant, and every query must filter by tenantId.
+model Tenant {
+  id       String  @id @default(uuid())
+  slug     String  @unique // stable, human-readable id, e.g. "leddar"
+  name     String
+  isActive Boolean @default(true)
+
+  // Per-tenant behaviour: system prompt, audiences, retrieval settings.
+  // Validated by src/lib/tenantConfig.js; unknown keys are ignored.
+  config Json @default("{}")
+
+  apiKeys   ApiKey[]
+  documents Document[]
+  chunks    Chunk[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Service-to-service credentials. The raw key is shown once at creation;
+// only its SHA-256 hash is stored.
+model ApiKey {
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  name    String // e.g. "leddar-server production"
+  prefix  String // first characters of the key, safe to display
+  keyHash String @unique
+
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([tenantId])
+}
+
+//////////////////////
+// KNOWLEDGE
+//////////////////////
+
+// A source item: a doc file, a web page, or a synced entity such as an artisan.
+model Document {
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Stable id from the caller (file path, URL, "artisan:<uuid>"). Re-ingesting
+  // the same externalId replaces the document instead of duplicating it.
+  externalId String
+  source     String // where it came from, e.g. "file", "url", "leddar-sync"
+  title      String?
+
+  // Who may retrieve it. Empty array = visible to every audience.
+  audience String[]
+
+  // Set for synced entities so they can be filtered or matched (Phase 6).
+  entityType String?
+  entityId   String?
+
+  metadata    Json   @default("{}")
+  contentHash String // skip re-embedding when content is unchanged
+
+  chunks Chunk[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, externalId])
+  @@index([tenantId, entityType])
+}
+
+// A retrievable piece of a document with its embedding.
+model Chunk {
+  id         String   @id @default(uuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  index      Int // position within the document
+  content    String
+  tokenCount Int?
+
+  // Copied from the document so retrieval can filter without a join.
+  audience String[]
+  metadata Json     @default("{}")
+
+  // Dimension must match EMBEDDING_DIMENSIONS. The HNSW index lives in the
+  // migration SQL because Prisma cannot express it in the schema.
+  embedding Unsupported("vector(1024)")?
+
+  createdAt DateTime @default(now())
+
+  @@unique([documentId, index])
+  @@index([tenantId])
+  @@index([audience], type: Gin) // fast "audience && ARRAY[...]" filtering
+}
