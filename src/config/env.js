@@ -19,6 +19,12 @@ const envSchema = z.object({
   // Checked when embedding, not at boot, so /health works without it.
   VOYAGE_API_KEY: optionalString,
   OLLAMA_BASE_URL: z.url().default("http://localhost:11434"),
+  // Optional: the Anthropic SDK also reads ANTHROPIC_AUTH_TOKEN or an
+  // `ant auth login` profile when this is unset.
+  ANTHROPIC_API_KEY: optionalString,
+  LLM_MODEL: z.string().default("claude-opus-5-5"),
+  // Thinking depth vs latency/cost. Claude Opus 5.5 defaults to medium.
+  LLM_EFFORT: z.enum(["low", "medium", "high", "xhigh", "max"]).default("medium"),
 });
 
 const parsed = envSchema.safeParse(process.env);
