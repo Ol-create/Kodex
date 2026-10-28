@@ -99,6 +99,53 @@ describe("ask service", () => {
     expect(queryLog.record).toHaveBeenCalledWith(expect.objectContaining({ status: "no_context", confidence: 0.12 }));
   });
 
+  it("searches again with the previous question when a follow-up matches weakly", async () => {
+    const retriever = { search: jest.fn().mockResolvedValueOnce([chunk(9, 0.2)]).mockResolvedValueOnce([chunk(1, 0.62)]) };
+    const llm = fakeLlm();
+    const service = createAskService({ retriever, llm, queryLog: fakeQueryLog() });
+    const history = [
+      { role: "user", content: "How many sample corrections can I request?" },
+      { role: "assistant", content: "Up to 2." },
+    ];
+
+    const result = await service.ask(tenant, { question: "Do I pay extra for those?", audience: ["brand"], history });
+
+    expect(retriever.search.mock.calls.map(([, { query }]) => query)).toEqual([
+      "Do I pay extra for those?",
+      "How many sample corrections can I request?\nDo I pay extra for those?",
+    ]);
+    expect(result).toMatchObject({ status: "answered", confidence: 0.62 });
+    // The model still sees the user's actual question, with history for context.
+    expect(llm.generate.mock.calls[0][0].messages.at(-1).content).toContain("Do I pay extra for those?");
+  });
+
+  it("does not search twice when the question matches well or there is no history", async () => {
+    for (const [chunks, history] of [
+      [[chunk(1, 0.7)], [{ role: "user", content: "earlier" }, { role: "assistant", content: "ok" }]],
+      [[chunk(1, 0.2)], []],
+    ]) {
+      const retriever = fakeRetriever(chunks);
+      const service = createAskService({ retriever, llm: fakeLlm(), queryLog: fakeQueryLog() });
+      await service.ask(tenant, { question: "q", audience: [], history });
+      expect(retriever.search).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it("keeps the first result when the expanded search is no better", async () => {
+    const retriever = { search: jest.fn().mockResolvedValueOnce([chunk(1, 0.2)]).mockResolvedValueOnce([chunk(2, 0.15)]) };
+    const llm = fakeLlm();
+    const service = createAskService({ retriever, llm, queryLog: fakeQueryLog() });
+
+    const result = await service.ask(tenant, {
+      question: "and the weather?",
+      audience: [],
+      history: [{ role: "user", content: "How do I pay?" }, { role: "assistant", content: "Via Paystack." }],
+    });
+
+    expect(result).toMatchObject({ status: "no_context", confidence: 0.2 });
+    expect(llm.generate).not.toHaveBeenCalled();
+  });
+
   it("returns the fallback when retrieval finds nothing", async () => {
     const service = createAskService({ retriever: fakeRetriever([]), llm: fakeLlm(), queryLog: fakeQueryLog() });
     const result = await service.ask(tenant, { question: "q", audience: [], history: [] });

@@ -17,7 +17,8 @@ leddar-server ──(X-API-Key)──▶ Kodex ──▶ Postgres + pgvector
 | 2 | Ingestion (load → chunk → embed → store) | ✅ |
 | 3 | Hybrid retrieval, `POST /v1/ask` (JSON + SSE), query logs | ✅ |
 | 4 | Leddar FAQ knowledge base, eval set, `minScore` tuning | ✅ |
-| 5 | Plug into Leddar (proxy route, feature flag, chat widget) | ⏳ |
+| 5 | Plug into Leddar (proxy route, feature flag, chat widget) | ✅ |
+| 6 | Artisan matching (`/match`) | ⏳ |
 
 ## Local setup (Windows + WSL)
 
@@ -189,6 +190,10 @@ Response:
 - **Audiences:** chunks with no audience are public. Otherwise a chunk is returned
   only if it shares an audience with the request (`"brand"` or `["admin", "brand"]`).
   Without an audience, only public chunks are searched.
+- **Follow-up questions:** retrieval uses the latest question. If it scores
+  below `minScore` and there is history (“do I pay extra for those?”), Kodex
+  searches again with the previous user question prepended and keeps the stronger
+  result. That costs a second embedding only for weak mid-conversation questions.
 - **Hybrid search** catches both paraphrases (semantic) and exact terms such as
   “KYC” or a reference number (keyword).
 - **Prompt-injection hygiene:** sources go to the model as data, and the system
@@ -242,6 +247,32 @@ UK?") score like real questions and are caught by the model’s `NO_ANSWER`.
 Known limitation: the HNSW index is shared by all tenants and filters apply after
 the index scan. Fine at this scale; for very large multi-tenant corpora use
 per-tenant partial indexes or pgvector ≥ 0.8 iterative scans.
+
+## Leddar integration
+
+Browsers never call Kodex directly. The Leddar API proxies questions, so the
+Kodex key stays on its server and the audience comes from the user's JWT role:
+
+```
+widget (brand / artisan / admin app)
+  └▶ POST /api/v1/help/ask   (Leddar API, signed-in user)
+       role BRAND → ["brand"], ARTISAN → ["artisan"], ADMIN → ["admin", "brand", "artisan"]
+       └▶ POST /v1/ask   (Kodex, Bearer KODEX_API_KEY, userId = Leddar user id)
+```
+
+- **Leddar server** (`server/src/modules/help/`): `GET /api/v1/help/status` and
+  `POST /api/v1/help/ask` (`{ question, history? }` → `{ success, data: { status, answer, sources } }`).
+  It sends the last 6 history turns, returns only cited sources (title and section),
+  turns Kodex errors into plain messages, and limits each user to 20 questions per
+  10 minutes.
+- **Feature flag:** set `KODEX_ENABLED=true`, `KODEX_URL` and `KODEX_API_KEY` in the
+  Leddar server `.env` (see `server/Env.additions`). When it is off, `/help/ask`
+  returns 404 and the widget hides itself, so the frontends need no redeploy to
+  turn it on or off.
+- **Widget** (`components/help/HelpWidget.jsx` in each frontend; one copy per app,
+  kept identical apart from the API client import): a floating Help button on every
+  signed-in page, with suggested questions per role, citations and the sources list.
+  The conversation is kept in `sessionStorage`, so it survives page changes.
 
 ## Multi-tenancy
 

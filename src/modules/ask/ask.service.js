@@ -86,6 +86,19 @@ export function createAskService({ retriever, llm, queryLog }) {
     return { sources, confidence };
   }
 
+  // Follow-ups like "do I pay extra for those?" match nothing on their own.
+  // When the question alone falls below minScore, search again with the
+  // previous user question prepended and keep whichever result is stronger.
+  // Costs a second embedding only for weak questions asked mid-conversation.
+  async function retrieveForConversation(tenant, input) {
+    const first = await retrieve(tenant, input);
+    const previous = input.history?.findLast((m) => m.role === "user")?.content;
+    if (!previous || first.confidence >= tenant.config.retrieval.minScore) return first;
+
+    const second = await retrieve(tenant, { ...input, question: `${previous}\n${input.question}` });
+    return second.confidence > first.confidence ? second : first;
+  }
+
   const publicSource = ({ content, ...source }, cited) => ({ ...source, snippet: content.slice(0, SNIPPET_LENGTH), cited });
 
   return {
@@ -105,7 +118,7 @@ export function createAskService({ retriever, llm, queryLog }) {
       };
 
       try {
-        const { sources, confidence } = await retrieve(tenant, input);
+        const { sources, confidence } = await retrieveForConversation(tenant, input);
         log.chunkIds = sources.map((s) => s.chunkId);
         log.confidence = confidence;
         onSources?.(sources.map((s) => publicSource(s, false)), confidence);
