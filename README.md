@@ -19,7 +19,7 @@ leddar-server ──(X-API-Key)──▶ Kodex ──▶ Postgres + pgvector
 | 4 | Leddar FAQ knowledge base, eval set, `minScore` tuning | ✅ |
 | 5 | Plug into Leddar (proxy route, feature flag, chat widget) | ✅ |
 | 6 | Artisan matching (`/v1/profiles`, `/v1/match`) | ✅ |
-| 7 | Production readiness | ⏳ |
+| 7 | Production readiness (config checks, logs, limits, retention, deploy, CI) | ✅ |
 
 ## Local setup (Windows + WSL)
 
@@ -63,8 +63,15 @@ or `X-API-Key: <key>`.
 | DELETE | `/v1/documents/:id` | key | Delete by Kodex id |
 | POST | `/v1/search` | key | Retrieval only: ranked chunks with scores, no LLM call |
 | POST | `/v1/ask` | key | Grounded answer with cited sources (`stream: true` for SSE) |
+| PUT | `/v1/profiles/:kind` | key | Create or update profiles for matching |
+| DELETE | `/v1/profiles/:kind/:externalId` | key | Delete one profile |
+| POST | `/v1/match` | key | Rank profiles against a request, no LLM call |
+| GET | `/v1/usage?days=30` | key | Questions by status, tokens, latency and top unanswered questions |
 
-Errors are always `{ "error": { "code", "message" } }`.
+Errors are always `{ "error": { "code", "message" } }`; unexpected 500s also
+carry `requestId`. Every response has an `X-Request-Id` header (a caller's own
+`X-Request-Id` is kept), and `/v1` responses report `RateLimit-Limit` and
+`RateLimit-Remaining`.
 
 ## Ingestion
 
@@ -321,6 +328,67 @@ widget (brand / artisan / admin app)
 ```bash
 npm run apikey:create -- leddar "leddar-server production"
 ```
+
+## Production
+
+### What's built in
+
+- **Startup checks:** with `NODE_ENV=production`, Kodex refuses to start without
+  the API keys its providers need (`VOYAGE_API_KEY`, `OPENAI_API_KEY` or
+  `ANTHROPIC_API_KEY`), instead of failing on the first question.
+- **Logs:** one JSON object per line in production (`LOG_FORMAT`), each request
+  with its id, tenant, status and duration. Query strings aren't logged.
+- **Rate limit per tenant:** `limits.requestsPerMinute` in the tenant config
+  (default 120, `0` = off) returns 429 with `Retry-After`. It's counted per
+  instance, so N instances allow up to N × the limit.
+- **Timeouts:** LLM calls give up after 90s (2 retries); embedding calls after 60s.
+- **Query log retention:** rows older than `QUERY_LOG_RETENTION_DAYS` (default 90)
+  are deleted at startup and daily, because they hold users' questions.
+- **Graceful shutdown:** on SIGTERM, in-flight requests (including streams) get
+  `SHUTDOWN_TIMEOUT_MS` (default 15s) to finish.
+- **Usage:** `GET /v1/usage` shows the answer rate, cost (tokens), latency and the
+  most frequent unanswered questions, which are the docs to write next.
+
+### Deploying to AWS Elastic Beanstalk
+
+The repo is ready for the Node.js platform, like leddar-server:
+
+- `Procfile` starts `node src/server.js`.
+- `.ebextensions/01_kodex.config` sets `NODE_ENV=production`, JSON logs,
+  `TRUST_PROXY=1`, the `/health/ready` health check, and runs
+  `prisma migrate deploy` once per deploy (leader only) before traffic switches.
+- `.platform/nginx/conf.d/kodex.conf` raises nginx's 1 MB body limit for ingestion.
+
+Steps:
+
+1. **Database:** Amazon RDS for PostgreSQL 16 (pgvector is included; the first
+   migration runs `CREATE EXTENSION vector`, which the RDS master user may do).
+   Turn on automated backups. Keep it private to the EB security group.
+2. **Environment properties** (console or `eb setenv`): `DATABASE_URL` (with
+   `?sslmode=require`), `VOYAGE_API_KEY`, `OPENAI_API_KEY`, and optionally
+   `LLM_MODEL`, `QUERY_LOG_RETENTION_DAYS`.
+3. **Deploy** (`eb deploy`), then seed and issue keys once from a machine that
+   can reach the database: `npm run db:seed`, `npm run apikey:create -- leddar "leddar-server production"`.
+4. **Ingest** the docs as in [Leddar knowledge base](#leddar-knowledge-base), e.g. `npm run ingest -- docs/leddar --source faq`.
+5. **Leddar:** set `KODEX_ENABLED=true`, `KODEX_URL` (the EB URL, over HTTPS) and
+   `KODEX_API_KEY` on leddar-server.
+
+Other hosts work too: run `npm ci`, `npx prisma migrate deploy`, then `npm start`.
+
+### Checklist before going live
+
+- [ ] Add a payment method on Voyage. The free tier (3 requests/minute) made
+      about a third of test questions fail or wait 35s.
+- [ ] Set an OpenAI usage limit and billing alert.
+- [ ] Use separate production API keys for Voyage, OpenAI and Kodex; revoke the
+      old `rag_…` dev key.
+- [ ] Run `npm run eval -- --answers` against production after ingesting.
+- [ ] Review `GET /v1/usage` weekly for unanswered questions.
+
+### CI
+
+`.github/workflows/ci.yml` runs `npm ci` and `npm test` on every push to `main`
+and on pull requests. The tests use fakes, so CI needs no database or API keys.
 
 ## Notes
 

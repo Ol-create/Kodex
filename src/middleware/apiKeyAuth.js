@@ -1,5 +1,6 @@
 import { extractApiKey, hashApiKey } from "../lib/apiKeys.js";
 import { tenantConfigSchema } from "../lib/tenantConfig.js";
+import { logger } from "../lib/logger.js";
 import { AppError } from "../utils/AppError.js";
 
 // Avoid a write on every request; lastUsedAt only needs minute precision.
@@ -28,7 +29,7 @@ export function apiKeyAuth({ db }) {
 
     const config = tenantConfigSchema.safeParse(record.tenant.config ?? {});
     if (!config.success) {
-      console.error(`Tenant ${record.tenant.slug} has invalid config`, config.error.issues);
+      logger.error("Tenant has invalid config", { tenant: record.tenant.slug, issues: config.error.issues });
       throw new AppError(500, "Tenant is misconfigured", "tenant_misconfigured");
     }
 
@@ -44,7 +45,7 @@ export function apiKeyAuth({ db }) {
     if (Date.now() - lastUsed > LAST_USED_THROTTLE_MS) {
       db.apiKey
         .update({ where: { id: record.id }, data: { lastUsedAt: new Date() } })
-        .catch((err) => console.error("Failed to update apiKey.lastUsedAt", err.message));
+        .catch((err) => logger.warn("Failed to update apiKey.lastUsedAt", { err: err.message }));
     }
 
     next();

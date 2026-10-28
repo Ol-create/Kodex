@@ -22,6 +22,13 @@ export const tenantConfigSchema = z.object({
       minScore: z.number().min(0).max(1).default(0.3),
     })
     .prefault({}),
+  limits: z
+    .object({
+      // Requests per minute across all of the tenant's API keys, per Kodex
+      // instance. Caps the bill if a key leaks or a client loops. 0 = no limit.
+      requestsPerMinute: z.number().int().min(0).default(120),
+    })
+    .prefault({}),
 });
 
 export function parseTenantConfig(raw) {

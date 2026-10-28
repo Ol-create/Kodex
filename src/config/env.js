@@ -29,9 +29,29 @@ const envSchema = z.object({
   // Optional: the Anthropic SDK also reads ANTHROPIC_AUTH_TOKEN or an
   // `ant auth login` profile when this is unset.
   ANTHROPIC_API_KEY: optionalString,
+
+  // "json" (one object per line, for log collectors) or "text". Default: json in production.
+  LOG_FORMAT: z.enum(["json", "text"]).optional(),
+  // Proxy hops in front of the app (Elastic Beanstalk: nginx = 1). 0 = none.
+  TRUST_PROXY: z.coerce.number().int().min(0).default(0),
+  // QueryLog rows (which hold users' questions) older than this are deleted
+  // daily. 0 keeps them forever.
+  QUERY_LOG_RETENTION_DAYS: z.coerce.number().int().min(0).default(90),
+  // How long in-flight requests get to finish on shutdown before exiting.
+  SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
+}).superRefine((env, ctx) => {
+  // Locally a missing key only fails the request that needs it (so /health
+  // works); a production server should refuse to start half-configured.
+  if (env.NODE_ENV !== "production") return;
+  const missing = (key) => ctx.addIssue({ code: "custom", path: [key], message: `${key} is required in production` });
+  if (env.EMBEDDING_PROVIDER === "voyage" && !env.VOYAGE_API_KEY) missing("VOYAGE_API_KEY");
+  if (env.LLM_PROVIDER === "openai" && !env.OPENAI_API_KEY) missing("OPENAI_API_KEY");
+  if (env.LLM_PROVIDER === "anthropic" && !env.ANTHROPIC_API_KEY) missing("ANTHROPIC_API_KEY");
 });
 
-const parsed = envSchema.safeParse(process.env);
+export const parseEnv = (raw) => envSchema.safeParse(raw);
+
+const parsed = parseEnv(process.env);
 
 if (!parsed.success) {
   console.error("Invalid environment configuration:\n" + z.prettifyError(parsed.error));

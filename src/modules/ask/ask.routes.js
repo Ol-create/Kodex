@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { logger } from "../../lib/logger.js";
 import { AppError } from "../../utils/AppError.js";
 import { askSchema, searchSchema } from "./ask.service.js";
 
@@ -57,8 +58,8 @@ export function askRoutes({ askService }) {
       // Before the stream opens, use the normal JSON error response.
       if (!started) throw err;
       if (controller.signal.aborted) return; // client went away
-      console.error(err);
       const safe = err instanceof AppError;
+      if (!safe) logger.error("Streaming ask failed", { requestId: req.id, tenant: req.tenant.slug, err });
       send("error", { code: safe ? err.code : "internal_error", message: safe ? err.message : "Something went wrong" });
       res.end();
     }

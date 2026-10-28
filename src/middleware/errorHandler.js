@@ -1,4 +1,5 @@
 import { ZodError, z } from "zod";
+import { logger } from "../lib/logger.js";
 import { AppError } from "../utils/AppError.js";
 
 export function notFound(req, res) {
@@ -26,6 +27,7 @@ export function errorHandler(err, req, res, next) {
     return res.status(413).json({ error: { code: "payload_too_large", message: "Request body is too large" } });
   }
 
-  console.error(err);
-  res.status(500).json({ error: { code: "internal_error", message: "Something went wrong" } });
+  logger.error("Unhandled error", { requestId: req.id, method: req.method, path: req.path, err });
+  // The request id lets support find this error in the logs.
+  res.status(500).json({ error: { code: "internal_error", message: "Something went wrong", requestId: req.id } });
 }

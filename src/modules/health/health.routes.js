@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { logger } from "../../lib/logger.js";
 
 export function healthRoutes({ db }) {
   const router = Router();
@@ -17,7 +18,7 @@ export function healthRoutes({ db }) {
       }
       res.json({ status: "ok", database: "ok", pgvector: rows[0].extversion });
     } catch (err) {
-      console.error("Readiness check failed:", err.message);
+      logger.error("Readiness check failed", { err: err.message });
       res.status(503).json({ status: "unavailable", database: "unreachable" });
     }
   });

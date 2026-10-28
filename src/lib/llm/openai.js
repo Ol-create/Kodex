@@ -53,12 +53,15 @@ function toAppError(err) {
   return err;
 }
 
+// The SDK default timeout is 10 minutes; a help answer that slow is a failure.
+const CLIENT_OPTIONS = { timeout: 90_000, maxRetries: 2 };
+
 export function createOpenAiLlm({ apiKey, model, effort, client }) {
   let openai = client;
   const getClient = () => {
     try {
       // Without an explicit key the SDK reads OPENAI_API_KEY.
-      openai ??= new OpenAI(apiKey ? { apiKey } : {});
+      openai ??= new OpenAI({ ...(apiKey && { apiKey }), ...CLIENT_OPTIONS });
       return openai;
     } catch (err) {
       throw toAppError(err);

@@ -48,13 +48,16 @@ function toAppError(err) {
   return err;
 }
 
+// The SDK default timeout is 10 minutes; a help answer that slow is a failure.
+const CLIENT_OPTIONS = { timeout: 90_000, maxRetries: 2 };
+
 export function createAnthropicLlm({ apiKey, model, effort, client }) {
   let anthropic = client;
   const getClient = () => {
     try {
       // Without an explicit key the SDK resolves ANTHROPIC_API_KEY,
       // ANTHROPIC_AUTH_TOKEN or an `ant auth login` profile.
-      anthropic ??= new Anthropic(apiKey ? { apiKey } : {});
+      anthropic ??= new Anthropic({ ...(apiKey && { apiKey }), ...CLIENT_OPTIONS });
       return anthropic;
     } catch (err) {
       throw toAppError(err);
