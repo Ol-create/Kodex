@@ -19,12 +19,16 @@ const envSchema = z.object({
   // Checked when embedding, not at boot, so /health works without it.
   VOYAGE_API_KEY: optionalString,
   OLLAMA_BASE_URL: z.url().default("http://localhost:11434"),
+  LLM_PROVIDER: z.enum(["openai", "anthropic"]).default("openai"),
+  // Defaults per provider: gpt-5.4-mini / claude-opus-5-5.
+  LLM_MODEL: optionalString,
+  // Reasoning depth vs latency/cost (ignored by non-reasoning OpenAI models).
+  LLM_EFFORT: z.enum(["low", "medium", "high", "xhigh", "max"]).default("medium"),
+  // Checked when answering, not at boot, so /health works without them.
+  OPENAI_API_KEY: optionalString,
   // Optional: the Anthropic SDK also reads ANTHROPIC_AUTH_TOKEN or an
   // `ant auth login` profile when this is unset.
   ANTHROPIC_API_KEY: optionalString,
-  LLM_MODEL: z.string().default("claude-opus-5-5"),
-  // Thinking depth vs latency/cost. Claude Opus 5.5 defaults to medium.
-  LLM_EFFORT: z.enum(["low", "medium", "high", "xhigh", "max"]).default("medium"),
 });
 
 const parsed = envSchema.safeParse(process.env);

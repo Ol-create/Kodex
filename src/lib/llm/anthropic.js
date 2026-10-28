@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { AppError } from "../utils/AppError.js";
+import { AppError } from "../../utils/AppError.js";
 
 const MAX_TOKENS = 16_000;
 
@@ -48,7 +48,7 @@ function toAppError(err) {
   return err;
 }
 
-export function createLlm({ apiKey, model, effort, client }) {
+export function createAnthropicLlm({ apiKey, model, effort, client }) {
   let anthropic = client;
   const getClient = () => {
     try {
@@ -72,6 +72,7 @@ export function createLlm({ apiKey, model, effort, client }) {
   });
 
   return {
+    provider: "anthropic",
     model,
 
     async generate(prompt) {

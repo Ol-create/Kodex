@@ -123,7 +123,7 @@ documents on their next ingest.
 question ─▶ embed ─┬▶ pgvector cosine (HNSW) ─┐
                    └▶ Postgres full-text ─────┴▶ Reciprocal Rank Fusion ─▶ top K chunks
          ─▶ confidence < minScore? ─yes─▶ tenant fallbackAnswer (no LLM call)
-                                    no ─▶ Claude with numbered <sources> ─▶ answer + [n] citations
+                                    no ─▶ LLM with numbered <sources>    ─▶ answer + [n] citations
 ```
 
 `POST /v1/ask`:
@@ -172,12 +172,16 @@ Response:
 
 ### LLM
 
-Generation uses Claude via the official SDK: `LLM_MODEL` (default `claude-opus-5-5`)
-and `LLM_EFFORT` (default `medium`; try `low` for faster, cheaper answers).
-Credentials come from `ANTHROPIC_API_KEY` or an `ant auth login` profile.
-Requests opt into Anthropic’s server-side refusal fallback (`fallbacks: "default"`),
-so a false-positive safety refusal is retried on a fallback model instead of failing.
-To opt out, remove `betas` and `fallbacks` in `src/lib/llm.js`.
+`LLM_PROVIDER` picks the model that writes answers; both use the official SDK and
+return the same shape, so the rest of the service doesn't care which one runs.
+
+| Provider | Key | Default `LLM_MODEL` | Notes |
+|---|---|---|---|
+| `openai` (default) | `OPENAI_API_KEY` | `gpt-5.4-mini` | Responses API with `store: false`, so documents aren't kept by OpenAI |
+| `anthropic` | `ANTHROPIC_API_KEY` or `ant auth login` | `claude-opus-5-5` | Opts into Anthropic's server-side refusal fallback (`fallbacks: "default"`); remove `betas`/`fallbacks` in `src/lib/llm/anthropic.js` to opt out |
+
+`LLM_EFFORT` (default `medium`) sets reasoning depth; try `low` for faster, cheaper
+answers. Non-reasoning OpenAI models (e.g. `gpt-4.1-mini`) ignore it.
 
 ### Tuning
 

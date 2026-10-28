@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { createLlm } from "../src/lib/llm.js";
+import { createAnthropicLlm as createLlm } from "../src/lib/llm/anthropic.js";
 
 const message = (overrides = {}) => ({
   model: "claude-opus-5-5",
@@ -38,7 +38,7 @@ function fakeClient({ create, final } = {}) {
   };
 }
 
-describe("createLlm", () => {
+describe("createAnthropicLlm", () => {
   it("sends model, effort and the default refusal fallback", async () => {
     const client = fakeClient();
     await createLlm({ model: "claude-opus-5-5", effort: "medium", client }).generate(prompt);
