@@ -18,7 +18,8 @@ leddar-server ──(X-API-Key)──▶ Kodex ──▶ Postgres + pgvector
 | 3 | Hybrid retrieval, `POST /v1/ask` (JSON + SSE), query logs | ✅ |
 | 4 | Leddar FAQ knowledge base, eval set, `minScore` tuning | ✅ |
 | 5 | Plug into Leddar (proxy route, feature flag, chat widget) | ✅ |
-| 6 | Artisan matching (`/match`) | ⏳ |
+| 6 | Artisan matching (`/v1/profiles`, `/v1/match`) | ✅ |
+| 7 | Production readiness | ⏳ |
 
 ## Local setup (Windows + WSL)
 
@@ -248,6 +249,23 @@ Known limitation: the HNSW index is shared by all tenants and filters apply afte
 the index scan. Fine at this scale; for very large multi-tenant corpora use
 per-tenant partial indexes or pgvector ≥ 0.8 iterative scans.
 
+## Matching
+
+Clients keep **profiles** in Kodex (for Leddar, one per artisan) and rank them
+against a free-text request. No LLM call is involved.
+
+- `PUT /v1/profiles/:kind`: `{ profiles: [{ externalId, text, attributes? }], replace? }`
+  creates or updates up to 1000 profiles of one kind (e.g. `artisan`). Only new or
+  changed text is embedded, in one request; `replace: true` deletes profiles of that
+  kind missing from the list. Returns `{ created, updated, unchanged, deleted }`.
+- `DELETE /v1/profiles/:kind/:externalId` removes one.
+- `POST /v1/match`: `{ kind, query, externalIds?, topK? }` returns
+  `{ results: [{ externalId, similarity, attributes }] }`, best first. Pass
+  `externalIds` to rank only those profiles (e.g. the artisans eligible right now).
+
+Ranking is an exact cosine scan with no approximate index: tenants have at most
+thousands of profiles, and an index would drop results filtered by `externalIds`.
+
 ## Leddar integration
 
 Browsers never call Kodex directly. The Leddar API proxies questions, so the
@@ -273,6 +291,25 @@ widget (brand / artisan / admin app)
   kept identical apart from the API client import): a floating Help button on every
   signed-in page, with suggested questions per role, citations and the sources list.
   The conversation is kept in `sessionStorage`, so it survives page changes.
+
+- **Artisan suggestions** (`server/src/modules/matching/`):
+  `GET /api/v1/admin/orders/:orderId/suggested-artisans` ranks the eligible artisans
+  (active, available, KYC-verified) for an order, scored out of 100 with reasons and warnings:
+
+  | Signal | Points | From |
+  |---|---|---|
+  | Specialty fits the product type | 35 | Leddar |
+  | Track record (finished vs declined/expired) | 20 | Leddar |
+  | Weekly capacity vs quantity and timeline (production) | 15 | Leddar |
+  | Current workload | 10 | Leddar |
+  | Produces for men / women / both | 10 | Leddar |
+  | Past work and bio similar to the order | 10 | Kodex `/v1/match` |
+
+  The artisan who made the approved sample always leads for production orders, and
+  declining or letting this order expire before costs 30 points. Artisan profiles
+  sent to Kodex hold skills and past work only (no names, contacts or addresses).
+  If Kodex is off or takes over 10 seconds, ranking continues without similarity.
+  The admin **Job Assignment** modal shows the top three, and sorts the full list by score.
 
 ## Multi-tenancy
 

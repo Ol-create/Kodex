@@ -11,6 +11,9 @@ import { createDocumentRepo } from "./modules/documents/documents.repo.js";
 import { documentRoutes } from "./modules/documents/documents.routes.js";
 import { createIngestService } from "./modules/documents/ingest.service.js";
 import { healthRoutes } from "./modules/health/health.routes.js";
+import { createProfileRepo } from "./modules/profiles/profiles.repo.js";
+import { profileRoutes } from "./modules/profiles/profiles.routes.js";
+import { createProfileService } from "./modules/profiles/profiles.service.js";
 import { tenantRoutes } from "./modules/tenant/tenant.routes.js";
 
 // Built as a factory so tests can pass fakes for the database, embedder, LLM
@@ -24,11 +27,13 @@ export function createApp({
   documentRepo = createDocumentRepo(db),
   retriever = createRetriever({ db, embedder }),
   queryLog = createQueryLogRepo(db),
+  profileRepo = createProfileRepo(db),
   logRequests = true,
 }) {
   const app = express();
   const ingestService = createIngestService({ repo: documentRepo, embedder });
   const askService = createAskService({ retriever, llm, queryLog });
+  const profileService = createProfileService({ repo: profileRepo, embedder });
 
   app.disable("x-powered-by");
   app.use(helmet());
@@ -42,6 +47,7 @@ export function createApp({
   app.use("/v1/tenant", tenantRoutes());
   app.use("/v1", documentRoutes({ ingestService, repo: documentRepo }));
   app.use("/v1", askRoutes({ askService }));
+  app.use("/v1", profileRoutes({ profileService }));
 
   app.use(notFound);
   app.use(errorHandler);

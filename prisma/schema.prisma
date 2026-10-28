@@ -26,6 +26,7 @@ model Tenant {
   documents Document[]
   chunks    Chunk[]
   queryLogs QueryLog[]
+  profiles  Profile[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -142,4 +143,26 @@ model QueryLog {
 
   @@index([tenantId, createdAt])
   @@index([tenantId, status])
+}
+
+// Things to match a request against (e.g. Leddar artisans for an order), kept
+// in sync by the client. `text` is embedded; `attributes` is returned as-is.
+model Profile {
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  kind       String // e.g. "artisan"
+  externalId String // the client's id
+  text       String
+  attributes Json   @default("{}")
+
+  contentHash String // skip re-embedding when text is unchanged
+  embedding   Unsupported("vector(1024)")?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, kind, externalId])
+  @@index([tenantId, kind])
 }
