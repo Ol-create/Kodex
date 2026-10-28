@@ -19,6 +19,7 @@
     "db:seed": "node prisma/seed.js",
     "apikey:create": "node scripts/create-api-key.js",
     "ingest": "node scripts/ingest.js",
+    "eval": "node scripts/eval.js",
     "test": "jest --config jest.config.cjs",
     "test:watch": "jest --config jest.config.cjs --watch"
   },

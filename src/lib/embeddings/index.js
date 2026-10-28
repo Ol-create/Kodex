@@ -7,6 +7,7 @@ import { createVoyageEmbedder } from "./voyage.js";
 //   provider, model, dimensions
 //   embedDocuments(texts: string[]) -> number[][]
 //   embedQuery(text: string)        -> number[]
+//   embedQueries(texts: string[])   -> number[][]  (many queries in one request)
 export function createEmbedder(env) {
   const options = { model: env.EMBEDDING_MODEL, dimensions: env.EMBEDDING_DIMENSIONS };
 
@@ -53,5 +54,7 @@ export function withSafetyChecks(embedder) {
     embedDocuments: (texts) =>
       texts.length === 0 ? Promise.resolve([]) : guard(async () => check(await embedder.embedDocuments(texts), texts.length)),
     embedQuery: (text) => guard(async () => check([await embedder.embedQuery(text)], 1)[0]),
+    embedQueries: (texts) =>
+      texts.length === 0 ? Promise.resolve([]) : guard(async () => check(await embedder.embedQueries(texts), texts.length)),
   };
 }

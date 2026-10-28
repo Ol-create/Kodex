@@ -31,6 +31,14 @@ describe("Voyage embedder", () => {
     expect(http.mock.calls[0][1].input_type).toBe("query");
   });
 
+  it("embeds many queries in one request", async () => {
+    const http = jest.fn(async (url, body) => ({ data: body.input.map((_, index) => ({ index, embedding: [index] })) }));
+    const vectors = await createVoyageEmbedder({ apiKey: "k", dimensions: 1, http }).embedQueries(["a", "b", "c"]);
+    expect(http).toHaveBeenCalledTimes(1);
+    expect(http.mock.calls[0][1]).toMatchObject({ input: ["a", "b", "c"], input_type: "query" });
+    expect(vectors).toEqual([[0], [1], [2]]);
+  });
+
   it("fails clearly without an API key", async () => {
     const embedder = createVoyageEmbedder({ apiKey: undefined, dimensions: 1024, http: jest.fn() });
     await expect(embedder.embedDocuments(["a"])).rejects.toMatchObject({ status: 503, code: "embedding_not_configured" });
@@ -48,6 +56,9 @@ describe("Ollama embedder", () => {
     expect(http.mock.calls[0][0]).toBe("http://localhost:11434/api/embed");
     expect(http.mock.calls[0][1]).toEqual({ model: "mxbai-embed-large", input: ["doc"] });
     expect(http.mock.calls[1][1].input[0]).toMatch(/^Represent this sentence.*question$/);
+
+    await embedder.embedQueries(["q1", "q2"]);
+    expect(http.mock.calls[2][1].input).toEqual(expect.arrayContaining([expect.stringMatching(/^Represent.*q2$/)]));
   });
 });
 

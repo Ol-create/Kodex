@@ -116,6 +116,63 @@ describe("ask service", () => {
     expect(result.sources.every((s) => !s.cited)).toBe(true);
   });
 
+  it("turns a NO_ANSWER reply into the fallback with no citations", async () => {
+    const queryLog = fakeQueryLog();
+    const service = createAskService({
+      retriever: fakeRetriever(),
+      llm: fakeLlm(completion({ text: "NO_ANSWER" })),
+      queryLog,
+    });
+    const result = await service.ask(tenant, { question: "q", audience: [], history: [] });
+
+    expect(result).toMatchObject({ status: "no_answer", answer: "Please contact support." });
+    expect(result.sources.every((s) => !s.cited)).toBe(true);
+    expect(queryLog.record).toHaveBeenCalledWith(expect.objectContaining({ status: "no_answer", citedChunkIds: [] }));
+  });
+
+  it("never streams the NO_ANSWER marker, even split across deltas", async () => {
+    const llm = {
+      stream: jest.fn(async (prompt, { onText }) => {
+        for (const piece of ["NO_", "ANS", "WER"]) onText(piece);
+        return completion({ text: "NO_ANSWER" });
+      }),
+    };
+    const deltas = [];
+    const result = await createAskService({ retriever: fakeRetriever(), llm, queryLog: fakeQueryLog() }).ask(
+      tenant,
+      { question: "q", audience: [], history: [] },
+      { onText: (t) => deltas.push(t) },
+    );
+
+    expect(deltas).toEqual([]);
+    expect(result.status).toBe("no_answer");
+  });
+
+  it("streams normal answers, including ones that start like the marker", async () => {
+    const stream = (pieces) => ({
+      stream: jest.fn(async (prompt, { onText }) => {
+        pieces.forEach(onText);
+        return completion({ text: pieces.join("") });
+      }),
+    });
+    const run = async (pieces) => {
+      const deltas = [];
+      const service = createAskService({ retriever: fakeRetriever(), llm: stream(pieces), queryLog: fakeQueryLog() });
+      const result = await service.ask(tenant, { question: "q", audience: [], history: [] }, { onText: (t) => deltas.push(t) });
+      return { deltas, result };
+    };
+
+    const normal = await run(["Artisans are paid ", "within 3 days [2]."]);
+    expect(normal.deltas).toEqual(["Artisans are paid ", "within 3 days [2]."]);
+
+    const lookalike = await run(["N", "O", " fee applies [1]."]);
+    expect(lookalike.deltas.join("")).toBe("NO fee applies [1].");
+    expect(lookalike.result.status).toBe("answered");
+
+    const short = await run(["N"]);
+    expect(short.deltas).toEqual(["N"]);
+  });
+
   it("rejects unknown audiences before retrieving", async () => {
     const retriever = fakeRetriever();
     const service = createAskService({ retriever, llm: fakeLlm(), queryLog: fakeQueryLog() });

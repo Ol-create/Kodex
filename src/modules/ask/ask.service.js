@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { AppError } from "../../utils/AppError.js";
-import { buildPrompt, extractCitations } from "./prompt.js";
+import { buildPrompt, extractCitations, NO_ANSWER } from "./prompt.js";
 
 const SNIPPET_LENGTH = 280;
 
@@ -28,6 +28,29 @@ export const askSchema = searchSchema.extend({
 });
 
 const round = (n) => Math.round(n * 1000) / 1000;
+
+const isNoAnswer = (text) => text.trimStart().startsWith(NO_ANSWER);
+
+// Holds streamed text back while it could still be the NO_ANSWER marker, so
+// clients never see the marker; once the text diverges it passes straight through.
+function withoutMarker(onText) {
+  let held = "";
+  let passing = false;
+  return {
+    push(delta) {
+      if (passing) return onText(delta);
+      held += delta;
+      const start = held.trimStart();
+      if (NO_ANSWER.startsWith(start) || start.startsWith(NO_ANSWER)) return;
+      passing = true;
+      onText(held);
+    },
+    // Releases a short reply that never diverged from a prefix of the marker.
+    flush() {
+      if (!passing && held && !isNoAnswer(held)) onText(held);
+    },
+  };
+}
 
 export function createAskService({ retriever, llm, queryLog }) {
   function assertAudiences(tenant, audiences) {
@@ -108,13 +131,24 @@ export function createAskService({ retriever, llm, queryLog }) {
           sources,
           history: input.history,
         });
-        const completion = onText ? await llm.stream(prompt, { onText, signal }) : await llm.generate(prompt);
+        let completion;
+        if (onText) {
+          const filter = withoutMarker(onText);
+          completion = await llm.stream(prompt, { onText: filter.push, signal });
+          filter.flush();
+        } else {
+          completion = await llm.generate(prompt);
+        }
 
-        const refused = completion.status === "refused";
-        const cited = refused ? [] : extractCitations(completion.text, sources.length);
+        // "refused": the model declined; "no_answer": the sources didn't cover
+        // the question. Both get the fallback, and neither cites anything.
+        const status =
+          completion.status === "refused" ? "refused" : isNoAnswer(completion.text) ? "no_answer" : "answered";
+        const answered = status === "answered";
+        const cited = answered ? extractCitations(completion.text, sources.length) : [];
         const result = {
-          status: refused ? "refused" : "answered",
-          answer: refused ? tenant.config.fallbackAnswer : completion.text,
+          status,
+          answer: answered ? completion.text : tenant.config.fallbackAnswer,
           confidence,
           sources: sources.map((s) => publicSource(s, cited.includes(s.id))),
           model: completion.model,

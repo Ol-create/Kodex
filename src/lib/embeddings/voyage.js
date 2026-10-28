@@ -32,5 +32,6 @@ export function createVoyageEmbedder({ apiKey, model = "voyage-3.5", dimensions,
     dimensions,
     embedDocuments: (texts) => embed(texts, "document"),
     embedQuery: async (text) => (await embed([text], "query"))[0],
+    embedQueries: (texts) => embed(texts, "query"),
   };
 }

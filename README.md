@@ -16,7 +16,8 @@ leddar-server ──(X-API-Key)──▶ Kodex ──▶ Postgres + pgvector
 | 1 | Tenants, API keys, schema, health checks | ✅ |
 | 2 | Ingestion (load → chunk → embed → store) | ✅ |
 | 3 | Hybrid retrieval, `POST /v1/ask` (JSON + SSE), query logs | ✅ |
-| 4 | Leddar knowledge base and evaluation | ⏳ |
+| 4 | Leddar FAQ knowledge base, eval set, `minScore` tuning | ✅ |
+| 5 | Plug into Leddar (proxy route, feature flag, chat widget) | ⏳ |
 
 ## Local setup (Windows + WSL)
 
@@ -105,6 +106,27 @@ Markdown frontmatter (`audience: [artisan]`, `title: …`) overrides the flags p
 file. `--prune` deletes documents of that `--source` that are no longer on disk, so
 use a distinct source name per corpus.
 
+### Leddar knowledge base
+
+`docs/leddar/` holds hand-written FAQs, one `##` question per chunk, with the audience in
+frontmatter (`audience: [brand]`; `audience: []` means public):
+
+| File | Audience |
+|---|---|
+| `general-faq.md` | everyone |
+| `brand-faq.md` | brand |
+| `artisan-faq.md` | artisan |
+| `admin-faq.md` | admin |
+
+```bash
+npm run ingest -- docs/leddar --source faq --prune
+```
+
+The Leddar repo's own docs (frontend READMEs, the flow guide, the API and database-schema
+PDFs) were ingested alongside them, each with its own `--source` and `--audience`.
+Write FAQ answers in users' words, and keep facts consistent across files: the model will
+point out contradictions rather than pick one.
+
 ### Embedding providers
 
 | `EMBEDDING_PROVIDER` | Default model | Needs |
@@ -124,6 +146,7 @@ question ─▶ embed ─┬▶ pgvector cosine (HNSW) ─┐
                    └▶ Postgres full-text ─────┴▶ Reciprocal Rank Fusion ─▶ top K chunks
          ─▶ confidence < minScore? ─yes─▶ tenant fallbackAnswer (no LLM call)
                                     no ─▶ LLM with numbered <sources>    ─▶ answer + [n] citations
+                                                                     └─ NO_ANSWER ─▶ fallbackAnswer
 ```
 
 `POST /v1/ask`:
@@ -154,8 +177,15 @@ Response:
 }
 ```
 
-- **`status`** is `answered`, `no_context` (nothing relevant enough, so the tenant’s
-  `fallbackAnswer` is returned without calling the LLM) or `refused`.
+- **`status`** is one of:
+  - `answered`
+  - `no_context`: nothing relevant enough, so the tenant’s `fallbackAnswer` is returned without calling the LLM
+  - `no_answer`: the sources looked relevant but didn’t answer the question; the model replied
+    `NO_ANSWER` (never streamed to the client) and the `fallbackAnswer` is returned
+  - `refused`: the model declined
+
+  Only `answered` cites sources. `no_context` and `no_answer` rows in `QueryLog` are the
+  questions your docs don’t cover yet.
 - **Audiences:** chunks with no audience are public. Otherwise a chunk is returned
   only if it shares an audience with the request (`"brand"` or `["admin", "brand"]`).
   Without an audience, only public chunks are searched.
@@ -185,9 +215,29 @@ answers. Non-reasoning OpenAI models (e.g. `gpt-4.1-mini`) ignore it.
 
 ### Tuning
 
-`Tenant.config.retrieval.topK` (default 5) and `minScore` (default 0.3) control how
-much context is sent and when to fall back. The right `minScore` depends on the
-embedding model, so tune it with Phase 4’s evaluation set.
+`Tenant.config.retrieval.topK` (default 5) and `minScore` (default 0.3; Leddar uses 0.4)
+control how much context is sent and when to skip the LLM. The right `minScore` depends
+on the embedding model, so measure it:
+
+```bash
+npm run eval                                  # retrieval only: one embedding request, no LLM cost
+npm run eval -- --answers                     # also generates and grades every answer
+npm run eval -- --answers --min-score 0.42    # try a threshold without changing the tenant
+```
+
+An eval set is JSON Lines (`eval/leddar.jsonl`); each case has a `question`, `audience`,
+`expect` (`answer` or `no_answer`) and optionally the `sources` (externalIds) that should be
+retrieved and `mustMention` / `mustNotMention` regexes. The script reports hit@K and MRR,
+the confidence ranges of answerable vs unanswerable questions, a suggested `minScore`
+(the middle of the best-separating range), and with `--answers` a pass/fail per case.
+Results are saved to `eval/results/` (gitignored). Eval runs don’t write to `QueryLog`.
+
+The gate is a cheap first filter, not the only one: off-topic questions ("who won the
+World Cup?") score low and never reach the LLM, while on-topic gaps ("do you ship to the
+UK?") score like real questions and are caught by the model’s `NO_ANSWER`.
+
+**Leddar baseline** (voyage-3.5 + gpt-5.4-mini, 32 cases, minScore 0.4): retrieval hit@5
+100%, MRR 1.0; answerable 0.428–0.739 vs unanswerable 0.303–0.483; answers 32/32 passed.
 
 Known limitation: the HNSW index is shared by all tenants and filters apply after
 the index scan. Fine at this scale; for very large multi-tenant corpora use

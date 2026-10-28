@@ -1,0 +1,32 @@
+{"id":"gen-what","audience":[],"question":"what is leddar and what does it do?","expect":"answer","sources":["faq:general-faq.md"],"mustMention":["leather"]}
+{"id":"gen-vat","audience":[],"question":"do you charge VAT on payments?","expect":"answer","sources":["faq:general-faq.md"],"mustMention":["7\\.5"]}
+{"id":"gen-products","audience":[],"question":"which kinds of leather products can be made?","expect":"answer","sources":["faq:general-faq.md"],"mustMention":["bag"]}
+{"id":"gen-worldcup","audience":[],"question":"Who won the 2022 World Cup?","expect":"no_answer"}
+{"id":"brand-pending","audience":["brand"],"question":"I signed up yesterday but login keeps saying awaiting admin approval. What does that mean?","expect":"answer","sources":["faq:general-faq.md","faq:brand-faq.md"],"mustMention":["approv"]}
+{"id":"brand-kyc-block","audience":["brand"],"question":"why is the place order button blocked for my account?","expect":"answer","sources":["faq:brand-faq.md","brand-app:README.md"],"mustMention":["CAC"]}
+{"id":"brand-corrections","audience":["brand"],"question":"how many times can I ask for my sample to be redone?","expect":"answer","sources":["faq:brand-faq.md"],"mustMention":["2|two"]}
+{"id":"brand-balance","audience":["brand"],"question":"how is the final production payment worked out?","expect":"answer","sources":["faq:brand-faq.md","brand-app:README.md"],"mustMention":["1\\.075|7\\.5"]}
+{"id":"brand-credit","audience":["brand"],"question":"do I end up paying for the sample twice when I pay for production?","expect":"answer","sources":["faq:brand-faq.md","brand-app:README.md"],"mustMention":["credit"]}
+{"id":"brand-invoice","audience":["brand"],"question":"where can I download my invoice as a PDF?","expect":"answer","sources":["faq:brand-faq.md","brand-app:README.md"],"mustMention":["invoices"]}
+{"id":"brand-video-hidden","audience":["brand"],"question":"the artisan already uploaded the sample video so why can't I watch it yet?","expect":"answer","sources":["faq:brand-faq.md","brand-app:README.md"],"mustMention":["review"]}
+{"id":"brand-paid-stuck","audience":["brand"],"question":"I paid on paystack but my order still shows submitted","expect":"answer","sources":["faq:brand-faq.md"],"mustMention":["support|refresh"]}
+{"id":"brand-shipped","audience":["brand"],"question":"what does the shipped status on my order mean?","expect":"answer","sources":["faq:brand-faq.md"],"mustMention":["way|dispatch"]}
+{"id":"brand-flow","audience":["brand"],"question":"walk me through the steps from placing an order to delivery","expect":"answer","sources":["faq:brand-faq.md","brand-app:README.md"],"mustMention":["sample"]}
+{"id":"brand-uk","audience":["brand"],"question":"Do you ship orders internationally to the UK?","expect":"no_answer"}
+{"id":"brand-jollof","audience":["brand"],"question":"What's the best recipe for jollof rice?","expect":"no_answer"}
+{"id":"brand-leak-expiry","audience":["brand"],"question":"how often does the background task that expires artisan jobs run?","expect":"no_answer","mustNotMention":["15 minutes"]}
+{"id":"art-expire","audience":["artisan"],"question":"what happens if I don't respond to a job I was assigned?","expect":"answer","sources":["faq:artisan-faq.md"],"mustMention":["expire"]}
+{"id":"art-address","audience":["artisan"],"question":"my address verification is still pending, can I still take jobs?","expect":"answer","sources":["faq:artisan-faq.md","artisan-app:README.md"],"mustMention":["block|yes"]}
+{"id":"art-video-size","audience":["artisan"],"question":"what is the biggest video file I can upload?","expect":"answer","sources":["faq:artisan-faq.md","artisan-app:README.md"],"mustMention":["100"]}
+{"id":"art-materials","audience":["artisan"],"question":"when do I get the money for materials?","expect":"answer","sources":["faq:artisan-faq.md","admin-app:README.md"],"mustMention":["accept"]}
+{"id":"art-rates","audience":["artisan"],"question":"leddar changed the commission but my earnings for an old order didn't change, why?","expect":"answer","sources":["faq:artisan-faq.md","artisan-app:README.md"],"mustMention":["created|snapshot"]}
+{"id":"art-bank","audience":["artisan"],"question":"how can I change the bank account I get paid into?","expect":"answer","sources":["faq:artisan-faq.md","artisan-app:README.md"],"mustMention":["Bank Details"]}
+{"id":"art-decline","audience":["artisan"],"question":"can I turn down a job I don't want?","expect":"answer","sources":["faq:artisan-faq.md"],"mustMention":["decline"]}
+{"id":"art-supplier","audience":["artisan"],"question":"Which leather supplier in Kano does Leddar recommend?","expect":"no_answer"}
+{"id":"adm-approve","audience":["admin"],"question":"which API endpoint approves a pending user?","expect":"answer","sources":["faq:admin-faq.md","api-docs:leddar-api-documentation.pdf"],"mustMention":["/admin/approve"]}
+{"id":"adm-expiry-cron","audience":["admin"],"question":"how often does the job expiry task run?","expect":"answer","sources":["faq:admin-faq.md"],"mustMention":["15"]}
+{"id":"adm-stage2","audience":["admin"],"question":"when am I allowed to release the stage 2 payment?","expect":"answer","sources":["faq:admin-faq.md","admin-app:README.md"],"mustMention":["DELIVERED|delivered"]}
+{"id":"adm-snapshot","audience":["admin"],"question":"why don't new commission rates affect existing orders?","expect":"answer","sources":["faq:admin-faq.md","admin-app:README.md"],"mustMention":["snapshot"]}
+{"id":"adm-tables","audience":["admin"],"question":"which database tables store payments or transactions?","expect":"answer","sources":["db-docs:leddar-database-schema.pdf"],"mustMention":["Payment"]}
+{"id":"adm-stuck","audience":["admin"],"question":"a brand paid but the order didn't move forward, what should I check?","expect":"answer","sources":["faq:admin-faq.md"],"mustMention":["webhook"]}
+{"id":"adm-paystack-url","audience":["admin"],"question":"what URL should the Paystack webhook point to?","expect":"answer","sources":["faq:admin-faq.md","admin-app:README.md"],"mustMention":["payments/webhook"]}

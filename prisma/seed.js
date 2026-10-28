@@ -8,12 +8,14 @@ const leddarConfig = parseTenantConfig({
   audiences: ["brand", "artisan", "admin"],
   systemPrompt:
     "You are Leddar's help assistant. Leddar connects fashion brands with skilled " +
-    "leather artisans in Nigeria for sample and production orders. Answer only from " +
-    "the provided context, be concise and friendly, and cite sources as [1], [2]. " +
-    "If the context does not answer the question, say you don't know and suggest " +
-    "contacting Leddar support. Never invent prices, timelines or policies.",
+    "leather artisans in Nigeria for sample and production orders. Users are brands, " +
+    "artisans or Leddar admins. Be concise and friendly, and speak to the user directly " +
+    "(\"you\"). Never invent prices, timelines or policies.",
   fallbackAnswer:
     "I couldn't find that in Leddar's help docs. Please contact Leddar support and the team will help you.",
+  // Tuned with `npm run eval` (voyage-3.5): answerable questions scored 0.43+,
+  // off-topic ones 0.30–0.37. On-topic gaps are caught by the model instead.
+  retrieval: { topK: 5, minScore: 0.4 },
 });
 
 async function main() {

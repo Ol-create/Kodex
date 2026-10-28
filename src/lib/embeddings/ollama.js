@@ -28,5 +28,6 @@ export function createOllamaEmbedder({ baseUrl, model = "mxbai-embed-large", dim
     dimensions,
     embedDocuments: (texts) => embed(texts),
     embedQuery: async (text) => (await embed([queryPrefix + text]))[0],
+    embedQueries: (texts) => embed(texts.map((text) => queryPrefix + text)),
   };
 }
